@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>أسعار التوصيل</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  /* تصميم: عمود واحد ضيق، خانة بحث كبيرة، نتائج على شكل بطاقات بسعر بارز */
+  :root {
+    --bg: #f7f5fb;
+    --surface: #ffffff;
+    --fg: #1f1730;
+    --muted: #6b6280;
+    --line: #e3def0;
+    --accent: #5b21b6;
+    --accent-fg: #ffffff;
+    --price-bg: #fff3bf;
+    --price-fg: #3b2a00;
+    --font: 'Tajawal', 'Segoe UI', Tahoma, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #15101f;
+      --surface: #1e1730;
+      --fg: #f1ecfa;
+      --muted: #a69cc0;
+      --line: #3a2f55;
+      --accent: #b79bff;
+      --accent-fg: #1a0f33;
+      --price-bg: #4a3a00;
+      --price-fg: #ffe98a;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font);
+    font-size: 16px;
+    line-height: 1.6;
+    padding-block: 28px 48px;
+    padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px));
+  }
+  main { max-width: 640px; margin: 0 auto; }
+  h1 { font-size: 1.75rem; font-weight: 800; margin: 0 0 4px; text-wrap: balance; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  .search {
+    position: sticky; top: 8px; z-index: 2;
+  }
+  input[type=search] {
+    width: 100%;
+    font: inherit; font-size: 1.15rem;
+    padding: 16px 18px;
+    border: 2px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--fg);
+    outline: none;
+  }
+  input[type=search]:focus { border-color: var(--accent); }
+  input[type=search]::placeholder { color: var(--muted); }
+  .status { color: var(--muted); font-size: .9rem; margin: 14px 2px 10px; min-height: 1.4em; }
+  .results { display: grid; gap: 10px; }
+  .card {
+    display: grid; grid-template-columns: 1fr auto; gap: 8px 14px; align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px 16px;
+  }
+  .area { font-weight: 700; font-size: 1.1rem; min-width: 0; overflow-wrap: anywhere; }
+  .meta { color: var(--muted); font-size: .9rem; grid-column: 1; }
+  .meta b { color: var(--fg); font-weight: 500; }
+  .price {
+    grid-row: 1 / span 2; grid-column: 2;
+    background: var(--price-bg); color: var(--price-fg);
+    border-radius: 10px; padding: 8px 14px; text-align: center; min-width: 84px;
+  }
+  .price .n { display: block; font-size: 1.5rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.2; }
+  .price .u { font-size: .75rem; }
+  .note {
+    margin-top: 16px; padding: 14px 16px; border: 1px dashed var(--line);
+    border-radius: 12px; color: var(--muted);
+  }
+  .note b { color: var(--fg); }
+  .lists { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .chip {
+    font: inherit; font-size: .9rem; cursor: pointer;
+    padding: 6px 12px; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--surface); color: var(--fg);
+  }
+  .chip[aria-pressed=true] { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+  .chip:focus-visible, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .foot { color: var(--muted); font-size: .8rem; margin-top: 28px; text-align: center; }
+  @media (max-width: 420px) { .price { min-width: 72px; padding: 6px 10px; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>أسعار التوصيل</h1>
+  <p class="sub">اكتب اسم المنطقة وبيطلعلك سعر التوصيل.</p>
+
+  <div class="search">
+    <input id="q" type="search" placeholder="مثلاً: خلدا، الجبيهة، طبربور" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="اسم المنطقة" disabled>
+  </div>
+
+  <div id="lists" class="lists" role="group" aria-label="تصفية حسب القائمة" hidden></div>
+  <div id="status" class="status" aria-live="polite">عم نحمّل الأسعار...</div>
+  <div id="results" class="results"></div>
+  <div id="note"></div>
+  <div id="foot" class="foot"></div>
+</main>
+
+<script>
+(function () {
+  var data = null, entries = [], activeList = null;
+  var $q = document.getElementById('q');
+  var $status = document.getElementById('status');
+  var $results = document.getElementById('results');
+  var $note = document.getElementById('note');
+  var $lists = document.getElementById('lists');
+  var $foot = document.getElementById('foot');
+
+  // توحيد الكتابة: تشكيل، همزات، ة/ه، ى/ي، مسافات
+  function norm(s) {
+    return String(s || '')
+      .replace(/[ً-ٰٟـ]/g, '')
+      .replace(/[أإآٱ]/g, 'ا')
+      .replace(/ة/g, 'ه')
+      .replace(/ى/g, 'ي')
+      .replace(/ؤ/g, 'و')
+      .replace(/ئ/g, 'ي')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  }
+  // نشيل "ال" التعريف من أول كل كلمة عشان "الرابية" و"رابية" يتطابقوا
+  function loose(s) {
+    return norm(s).split(' ').map(function (w) {
+      return w.length > 3 && w.indexOf('ال') === 0 ? w.slice(2) : w;
+    }).join(' ');
+  }
+
+  function price(n) { return Number(n).toFixed(2); }
+
+  function build(d) {
+    data = d; entries = [];
+    d.lists.forEach(function (l) {
+      l.zones.forEach(function (z) {
+        z.areas.forEach(function (a) {
+          entries.push({ area: a, n: norm(a), l: loose(a), list: l.name, code: z.code, price: z.price });
+        });
+      });
+    });
+    if (d.lists.length > 1) {
+      $lists.hidden = false;
+      var all = chip('كل القوائم', null);
+      $lists.appendChild(all);
+      d.lists.forEach(function (l) { $lists.appendChild(chip(l.name, l.name)); });
+    }
+    $q.disabled = false;
+    $q.focus();
+    $status.textContent = 'اكتب حرفين على الأقل.';
+    var t = new Date(d.updated);
+    $foot.textContent = 'آخر تحديث للأسعار: ' + t.toLocaleTimeString('ar-JO', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function chip(label, value) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'chip'; b.textContent = label;
+    b.setAttribute('aria-pressed', String(activeList === value));
+    b.addEventListener('click', function () {
+      activeList = value;
+      Array.prototype.forEach.call($lists.children, function (c) {
+        c.setAttribute('aria-pressed', String(c === b));
+      });
+      render();
+    });
+    return b;
+  }
+
+  function render() {
+    $results.textContent = ''; $note.textContent = '';
+    var raw = $q.value, qn = norm(raw), ql = loose(raw);
+    if (qn.length < 2) { $status.textContent = 'اكتب حرفين على الأقل.'; return; }
+
+    var found = entries.filter(function (e) {
+      if (activeList && e.list !== activeList) return false;
+      return e.n.indexOf(qn) !== -1 || e.l.indexOf(ql) !== -1;
+    });
+
+    found.sort(function (a, b) {
+      var as = (a.n.indexOf(qn) === 0 || a.l.indexOf(ql) === 0) ? 0 : 1;
+      var bs = (b.n.indexOf(qn) === 0 || b.l.indexOf(ql) === 0) ? 0 : 1;
+      return as - bs || a.area.localeCompare(b.area, 'ar') || a.price - b.price;
+    });
+
+    if (!found.length) {
+      $status.textContent = 'ما لقينا منطقة بهالاسم.';
+      var fb = data.lists.filter(function (l) { return l.fallback && (!activeList || l.name === activeList); });
+      if (fb.length) {
+        var box = document.createElement('div'); box.className = 'note';
+        var t = document.createElement('b'); t.textContent = 'للمناطق غير المذكورة: ';
+        box.appendChild(t);
+        box.appendChild(document.createTextNode(fb.map(function (l) {
+          return l.name + ' (' + price(l.fallback.price) + ' د.أ للكيلومتر)';
+        }).join('، ')));
+        $note.appendChild(box);
+      }
+      return;
+    }
+
+    var shown = found.slice(0, 40);
+    $status.textContent = found.length + (found.length === 1 ? ' نتيجة' : ' نتيجة') +
+      (found.length > shown.length ? ' (عم نعرض أول ' + shown.length + ')' : '');
+
+    shown.forEach(function (e) {
+      var c = document.createElement('div'); c.className = 'card';
+      var a = document.createElement('div'); a.className = 'area'; a.textContent = e.area;
+      var m = document.createElement('div'); m.className = 'meta';
+      m.appendChild(document.createTextNode('قائمة '));
+      var bl = document.createElement('b'); bl.textContent = e.list; m.appendChild(bl);
+      if (e.code) m.appendChild(document.createTextNode(' · ' + e.code));
+      var p = document.createElement('div'); p.className = 'price';
+      var n = document.createElement('span'); n.className = 'n'; n.textContent = price(e.price);
+      var u = document.createElement('span'); u.className = 'u'; u.textContent = 'دينار';
+      p.appendChild(n); p.appendChild(u);
+      c.appendChild(a); c.appendChild(m); c.appendChild(p);
+      $results.appendChild(c);
+    });
+  }
+
+  $q.addEventListener('input', render);
+
+  // الصق هون رابط الـ Web App اللي بيطلع بعد النشر (بينتهي بـ /exec)
+  var API_URL = 'https://script.google.com/macros/s/AKfycbzngMu-3OSGtU1tLV3xDQcdxbmXwT3gdGMwU_k_2fF_bGU1qg0r_UwBA2-XDCI5LXU/exec';
+
+  fetch(API_URL)
+    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(build)
+    .catch(function () {
+      $status.textContent = 'صار خطأ بتحميل الأسعار. جرّب تحدّث الصفحة.';
+    });
+})();
+</script>
+</body>
+</html>
